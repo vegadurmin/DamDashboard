@@ -214,7 +214,7 @@ function downloadPNG(){
  if(ebLayer){ ebLayer.bringToFront(); }
  // markers for the selected date (radius scaled to the hi-res render; thin border)
  DAMS.forEach(dm=>{const v=dm.vals[di];
-   L.circleMarker([dm.lat,dm.lon],{radius:9*MAP_SCALE,fillColor:colorFor(v),color:'#333',weight:1.5*MAP_SCALE,fillOpacity:.95}).addTo(emap);
+   L.circleMarker([dm.lat,dm.lon],{radius:9*MAP_SCALE,fillColor:colorFor(v),color:'#333',weight:0.6*MAP_SCALE,fillOpacity:.95}).addTo(emap);
  });
  fitToIndia();
 
@@ -233,7 +233,7 @@ function downloadPNG(){
    .then(dataUrl=>{
     const mapImg=new Image();
     mapImg.onload=()=>{
-     // Output canvas at DPI_SCALE x the layout size = 300 dpi. We draw using the
+     // Output canvas at DPI_SCALE x the layout size = 600 dpi. We draw using the
      // original layout coordinates and let ctx.scale() blow everything up, so all
      // text, vectors, and the map stay crisp at the higher resolution.
      const cv=document.createElement('canvas');
@@ -251,6 +251,8 @@ function downloadPNG(){
      ctx.strokeStyle='#333';ctx.lineWidth=1;ctx.strokeRect(mapX,mapY,mapW,mapH);
      // north arrow (top-right corner of the map)
      drawNorthArrow(ctx, mapX+mapW-38, mapY+42);
+     // histogram inset (bottom-right of the map): dam counts per storage bin
+     drawHistogram(ctx, di, mapX, mapY, mapW, mapH);
      // colour scale directly below the map
      const scaleW=Math.min(900, availW*0.9), scaleX=(PAGE_W-scaleW)/2;
      drawColorScale(ctx, scaleX, scaleY, scaleW, SCALE_H);
@@ -297,6 +299,50 @@ function drawColorScale(ctx,x,y,w,h){
  for(let t=0;t<=10;t++){const px=x+(w*t/10);ctx.fillText(String(t*10),px,y+h+20);}
  ctx.font='bold 17px system-ui,Arial';
  ctx.fillText('Normalized storage (%)',x+w/2,y-10);
+}
+
+// Histogram inset drawn onto the map's bottom-right: number of dams in each of
+// the 11 storage bins for the selected date, bars coloured by bin, count above.
+function drawHistogram(ctx, di, mapX, mapY, mapW, mapH){
+ const n=BIN_COLORS.length;
+ const counts=new Array(n).fill(0);
+ DAMS.forEach(dm=>{const b=binIndex(dm.vals[di]); if(b!=null) counts[b]++;});
+ const maxC=Math.max(1, ...counts);
+ // panel box (layout units), anchored bottom-right inside the map with a margin
+ const pad=10, W=400, H=230;
+ const px=mapX+mapW-W-140, py=mapY+mapH-H-110;
+ // background
+ ctx.fillStyle='rgba(255,255,255,0.92)';
+ ctx.strokeStyle='#333';ctx.lineWidth=1;
+ ctx.fillRect(px,py,W,H);ctx.strokeRect(px,py,W,H);
+ // title
+ ctx.fillStyle='#222';ctx.textAlign='center';ctx.font='bold 16px system-ui,Arial';
+ ctx.fillText('Dams per storage bin', px+W/2, py+16);
+ // plot area
+ const plotX=px+pad, plotY=py+24, plotW=W-pad*2, plotH=H-24-30;
+ const bw=plotW/n;
+ for(let i=0;i<n;i++){
+   const bh=(counts[i]/maxC)*plotH;
+   const bx=plotX+i*bw, by=plotY+plotH-bh;
+   ctx.fillStyle=BIN_COLORS[i];
+   ctx.fillRect(bx+1, by, bw-2, bh);
+   ctx.strokeStyle='#666';ctx.lineWidth=0.5;ctx.strokeRect(bx+1, by, bw-2, bh);
+   // count annotation above each bar (skip zeros to reduce clutter)
+   if(counts[i]>0){
+     ctx.fillStyle='#222';ctx.font='12px system-ui,Arial';ctx.textAlign='center';
+     ctx.fillText(String(counts[i]), bx+bw/2, by-2);
+   }
+ }
+ // baseline
+ ctx.strokeStyle='#333';ctx.lineWidth=0.8;
+ ctx.beginPath();ctx.moveTo(plotX,plotY+plotH);ctx.lineTo(plotX+plotW,plotY+plotH);ctx.stroke();
+ // x-axis labels: bin lower edges at every other tick
+ ctx.fillStyle='#333';ctx.font='11px system-ui,Arial';ctx.textAlign='center';
+ for(let t=0;t<=n;t+=2){
+   ctx.fillText(String(t*10), plotX+t*bw, plotY+plotH+11);
+ }
+ ctx.font='12px system-ui,Arial';
+ ctx.fillText('Normalized storage (%)', px+W/2, py+H-6);
 }
 
 // =====================================================================
